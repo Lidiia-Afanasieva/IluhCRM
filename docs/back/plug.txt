@@ -1,0 +1,242 @@
+бэк:
+
+
+
+контроллер пользователей
+
+путь: backend\src\modules\customers\customers.controller.ts
+
+@ApiTags("customers")
+@Controller()
+export class CustomersController {
+  constructor(private readonly customers: CustomersService) {}
+
+  @Get("health")
+  @ApiOkResponse({ description: "Проверка доступности сервера" })
+  health() {
+    return this.customers.health();
+  }
+
+  @Get("customers")
+  listCustomers() {
+    return this.customers.listCustomers();
+  }
+
+  @Get("customers/:id")
+  getCustomer(@Param("id") id: string) {
+    return this.customers.getCustomerById(id);
+  }
+
+  @Get("customers/:id/interactions")
+  listInteractions(@Param("id") id: string) {
+    return this.customers.listInteractions(id);
+  }
+
+  @Post("customers/:id/interactions")
+  addInteraction(@Param("id") id: string, @Body() dto: CreateInteractionDto) {
+    return this.customers.addInteraction(id, dto);
+  }
+}
+
+
+
+_____________________________________________________________________________
+контроллер аутентификации
+
+путь: backend\src\modules\auth\auth.controller.ts
+
+@ApiTags("auth")
+@Controller("auth")
+export class AuthController {
+  constructor(private readonly auth: AuthService) {}
+
+  @Post("login")
+  @ApiOkResponse({ description: "Возврат JWT токена и профиля" })
+  login(@Body() dto: LoginDto) {
+    return this.auth.login(dto.email, dto.password);
+  }
+
+  @Get("me")
+  @UseGuards(AuthGuard("jwt"))
+  @ApiBearerAuth("jwt")
+  @ApiOkResponse({ description: "Возврат профиля по токену" })
+  me(@Req() req: any) {
+    return this.auth.me(req.user.id);
+  }
+}
+
+_____________________________________________________________________________
+пользовательский сервис
+
+путь: backend\src\modules\customers\customers.service.ts
+
+
+@Injectable()
+export class CustomersService {
+  health() {
+    return { status: "ok" };
+  }
+
+  listCustomers() {
+    return {
+      items: db.customers,
+      total: db.customers.length,
+    };
+  }
+
+  getCustomerById(id: string) {
+    const c = db.customers.find((x) => x.id === id);
+    if (!c) {
+      throw new NotFoundException("Клиент не найден");
+    }
+    return c;
+  }
+
+  listInteractions(customerId: string) {
+    this.getCustomerById(customerId);
+    const items = db.interactions
+      .filter((x) => x.customerId === customerId)
+      .slice()
+      .sort((a, b) => (a.occurredAt < b.occurredAt ? 1 : -1));
+    return { items, total: items.length };
+  }
+
+  addInteraction(customerId: string, dto: CreateInteractionDto) {
+    const c = this.getCustomerById(customerId);
+
+    const it: Interaction = {
+      id: nextId("i"),
+      customerId,
+      kind: dto.kind,
+      occurredAt: dto.occurredAt,
+      summary: dto.summary,
+      outcome: dto.outcome ?? null,
+    };
+
+    db.interactions.push(it);
+
+    c.lastInteractionAt = dto.occurredAt;
+
+    return it;
+  }
+}
+
+
+
+
+фронт:
+
+
+
+панель навигации
+
+путь: \frontend\src\app\layout\SideNav.tsx
+
+
+import { Link as RouterLink, useLocation } from "react-router-dom";
+import {
+  Divider,
+  Drawer,
+  List,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  Toolbar,
+} from "@mui/material";
+
+import DashboardIcon from "@mui/icons-material/Dashboard";
+import PersonSearchIcon from "@mui/icons-material/PersonSearch";
+import TuneIcon from "@mui/icons-material/Tune";
+import TaskAltIcon from "@mui/icons-material/TaskAlt";
+
+type Props = {
+  drawerWidth: number;
+};
+
+// боковая панель, меню
+export function SideNav(props: Props) {
+  const location = useLocation();
+
+  // список вкладок меню
+  const items = [
+    { to: "/quality", label: "Качество обслуживания", icon: <DashboardIcon /> },
+    { to: "/personalization", label: "Персонализация", icon: <TuneIcon /> },
+    { to: "/customers", label: "Клиенты", icon: <PersonSearchIcon /> },
+    { to: "/tasks", label: "Задачи", icon: <TaskAltIcon /> },
+  ];
+ 
+  return (
+    <Drawer
+      variant="permanent"
+      sx={{
+        width: props.drawerWidth,
+        flexShrink: 0,
+        [`& .MuiDrawer-paper`]: { width: props.drawerWidth, boxSizing: "border-box" },
+      }}
+    >
+      <Toolbar />
+      <Divider />
+      {/* заполнение списка кнопок вкладок меню перебором */}
+      <List>
+        {items.map((x) => {
+          const selected = location.pathname === x.to;
+          return (
+            <ListItemButton
+              key={x.to}
+              component={RouterLink}
+              to={x.to}
+              selected={selected}
+            >
+              <ListItemIcon>{x.icon}</ListItemIcon>
+              <ListItemText primary={x.label} />
+            </ListItemButton>
+          );
+        })}
+      </List>
+    </Drawer>
+  );
+}
+
+
+
+роутер
+
+путь: \frontend\src\app\router\AppRouter.tsx
+
+import React from "react";
+import { Navigate, Route, Routes } from "react-router-dom";
+import { routes } from "@/app/router/routes";
+import { ProtectedRoute } from "@/features/auth/ui/ProtectedRoute";
+import { AppShell } from "@/widgets/AppShell/AppShell";
+
+import { LoginPage } from "@/pages/LoginPage/LoginPage";
+import { DashboardPage } from "@/pages/DashboardPage/DashboardPage";
+import { ClientsPage } from "@/pages/ClientsPage/ClientsPage";
+import { ClientProfilePage } from "@/pages/ClientProfilePage/ClientProfilePage";
+import { QualityPage } from "@/pages/QualityPage/QualityPage";
+import { PersonalizationPage } from "@/pages/PersonalizationPage/PersonalizationPage";
+
+export function AppRouter() {
+  return (
+    <Routes>
+      <Route path={routes.login} element={<LoginPage />} />
+
+      <Route
+        path="/"
+        element={
+          <ProtectedRoute>
+            <AppShell />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<DashboardPage />} />
+        <Route path="clients" element={<ClientsPage />} />
+        <Route path="clients/:id" element={<ClientProfilePage />} />
+        <Route path="quality" element={<QualityPage />} />
+        <Route path="personalization" element={<PersonalizationPage />} />
+      </Route>
+
+      <Route path="*" element={<Navigate to={routes.dashboard} replace />} />
+    </Routes>
+  );
+}
