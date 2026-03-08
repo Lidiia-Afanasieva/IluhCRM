@@ -40,7 +40,7 @@ export function LoginPage() {
           Вход
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-          Временная моковая авторизация для сборки каркаса фронта
+          Ведите почту и пароль для авторизации в системе
         </Typography>
 
         <Box
