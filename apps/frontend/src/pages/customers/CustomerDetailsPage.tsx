@@ -10,6 +10,7 @@ import { useCustomerById } from "../../api/hooks/useCustomerById";
 import { useInteractions } from "../../api/hooks/useInteractions";
 import { useQuality } from "../../api/hooks/useQuality";
 import { usePersonalization } from "../../api/hooks/usePersonalization";
+import { useCustomers } from "../../api/hooks/useCustomers";
 
 import { CustomerHeader } from "./parts/CustomerHeader";
 import { CustomerTabs, type CustomerTabKey } from "./parts/CustomerTabs";
@@ -25,6 +26,7 @@ export function CustomerDetailsPage() {
   const [tab, setTab] = useState<CustomerTabKey>("history");
 
   const customerQuery = useCustomerById(id);
+  const allCustomersQuery = useCustomers({});
   const interactionsQuery = useInteractions(id);
   const qualityQuery = useQuality(id);
   const personalizationQuery = usePersonalization(id);
@@ -60,7 +62,12 @@ export function CustomerDetailsPage() {
 
         <Box sx={{ pt: 2 }}>
           {tab === "history" ? (
-            <CustomerHistoryTab customerId={id} query={interactionsQuery} />
+            <CustomerHistoryTab
+              customerId={id}
+              customer={customerQuery.data}
+              allCustomers={allCustomersQuery.data}
+              query={interactionsQuery}
+            />
           ) : null}
 
           {tab === "quality" ? (
@@ -68,7 +75,12 @@ export function CustomerDetailsPage() {
           ) : null}
 
           {tab === "personalization" ? (
-            <CustomerPersonalTab customerId={id} query={personalizationQuery} />
+            <CustomerPersonalTab
+              customerId={id}
+              customer={customerQuery.data}
+              allCustomers={allCustomersQuery.data}
+              query={personalizationQuery}
+            />
           ) : null}
         </Box>
       </Paper>

@@ -245,14 +245,9 @@ export async function mockRouter<T>(req: MockReq): Promise<HttpResponse<T>> {
 
       if (status) rows = rows.filter((x) => x.status === status);
       if (customerIdQ) rows = rows.filter((x) => x.customerId === customerIdQ);
+      if (assignedUserId) rows = rows.filter(() => db.me.id === assignedUserId);
 
-      if (assignedUserId) {
-        rows = rows.filter(() => db.me.id === assignedUserId);
-      }
-
-      if (period.from && period.to) {
-        rows = rows.filter((x) => inDateRange(x.dueAt, period.from, period.to));
-      }
+      rows = rows.filter((x) => inDateRange(x.dueAt, period.from, period.to));
 
       if (overdue === true) {
         rows = rows.filter((x) => x.status === "open" && dayjs(x.dueAt).isBefore(now));
@@ -273,16 +268,39 @@ export async function mockRouter<T>(req: MockReq): Promise<HttpResponse<T>> {
     });
   }
 
+  if (req.path === "/tasks" && req.method === "POST") {
+    return requireAuth(req, () => {
+      const body = req.body as any;
+
+      const created = {
+        id: `t${db.tasks.length + 1}`,
+        customerId: String(body.customerId),
+        title: String(body.title),
+        status: body.status ?? "open",
+        dueAt: String(body.dueAt),
+        priority: Number(body.priority ?? 3),
+        assignedTo: String(body.assignedTo ?? db.me.fullName),
+      };
+
+      db.tasks.push(created);
+
+      const cust = db.customers.find((x) => x.id === created.customerId);
+      if (cust) {
+        cust.nextActionDueAt = created.dueAt;
+      }
+
+      return ok(buildTaskListItem(created) as any);
+    });
+  }
+
   const taskId = parseId(req.path, "/tasks/");
   if (taskId && req.method === "PATCH" && req.path === `/tasks/${taskId}`) {
     return requireAuth(req, () => {
       const body = req.body as any;
-
       const idx = db.tasks.findIndex((t) => t.id === taskId);
       if (idx < 0) return { status: 404, data: ({} as any) };
 
       const current = db.tasks[idx];
-
       const next = {
         ...current,
         status: body.status ?? current.status,
@@ -292,8 +310,12 @@ export async function mockRouter<T>(req: MockReq): Promise<HttpResponse<T>> {
 
       db.tasks[idx] = next;
 
-      const dto = buildTaskListItem(next);
-      return ok(dto as any);
+      const cust = db.customers.find((x) => x.id === next.customerId);
+      if (cust && next.status === "open") {
+        cust.nextActionDueAt = next.dueAt;
+      }
+
+      return ok(buildTaskListItem(next) as any);
     });
   }
 
@@ -364,7 +386,7 @@ export async function mockRouter<T>(req: MockReq): Promise<HttpResponse<T>> {
           ? Math.round((firstRespValues.filter((v) => v <= target).length / firstRespValues.length) * 100)
           : 0;
 
-      const dto = {
+      return ok({
         period: { from: period.from, to: period.to },
         sla: {
           firstResponseTargetSeconds: target,
@@ -378,9 +400,7 @@ export async function mockRouter<T>(req: MockReq): Promise<HttpResponse<T>> {
           npsAvg,
         },
         overdueTasks: overdueRows,
-      };
-
-      return ok(dto as any);
+      } as any);
     });
   }
 

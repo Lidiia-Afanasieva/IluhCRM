@@ -3,14 +3,18 @@ import { Box, Button, Paper, Stack, Typography } from "@mui/material";
 import type { UseQueryResult } from "@tanstack/react-query";
 
 import type { PersonalizationDto } from "../../../api/dto/personalization.dto";
+import type { CustomerDto } from "../../../api/dto/customers.dto";
 import { LoadingState } from "../../../components/common/LoadingState";
 import { ErrorState } from "../../../components/common/ErrorState";
 
 import { AddNoteDialog } from "./AddNoteDialog";
 import { AddNextActionDialog } from "./AddNextActionDialog";
+import { CreateTaskDialog } from "../../tasks/parts/CreateTaskDialog";
 
 type Props = {
   customerId: string;
+  customer?: CustomerDto;
+  allCustomers?: CustomerDto[];
   query: UseQueryResult<PersonalizationDto, unknown>;
 };
 
@@ -21,12 +25,13 @@ function valueOrDash(v: string | null) {
 export function CustomerPersonalTab(props: Props) {
   const [openNote, setOpenNote] = useState(false);
   const [openNext, setOpenNext] = useState(false);
+  const [openTask, setOpenTask] = useState(false);
 
   const p = useMemo(() => props.query.data, [props.query.data]);
 
   return (
     <Box>
-      <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", mb: 2 }}>
+      <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", mb: 2, gap: 1, flexWrap: "wrap" }}>
         <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
           Персонализация
         </Typography>
@@ -34,6 +39,9 @@ export function CustomerPersonalTab(props: Props) {
         <Stack direction="row" spacing={1}>
           <Button variant="outlined" onClick={() => setOpenNote(true)}>
             Добавить заметку
+          </Button>
+          <Button variant="outlined" onClick={() => setOpenTask(true)}>
+            Создать follow-up
           </Button>
           <Button variant="contained" onClick={() => setOpenNext(true)}>
             Назначить следующий шаг
@@ -46,10 +54,19 @@ export function CustomerPersonalTab(props: Props) {
         open={openNote}
         onClose={() => setOpenNote(false)}
       />
+
       <AddNextActionDialog
         customerId={props.customerId}
         open={openNext}
         onClose={() => setOpenNext(false)}
+      />
+
+      <CreateTaskDialog
+        open={openTask}
+        onClose={() => setOpenTask(false)}
+        customers={props.allCustomers ?? (props.customer ? [props.customer] : [])}
+        presetCustomerId={props.customerId}
+        presetCustomerName={props.customer?.name}
       />
 
       {props.query.isLoading ? <LoadingState /> : null}

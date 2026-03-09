@@ -2,14 +2,15 @@ import { httpRequest } from "../httpClient";
 import type { TaskStatus } from "../dto/tasks.dto";
 import type { TaskListItemDto } from "../dto/tasksList.dto";
 import type { TaskUpdateRequest } from "../dto/tasksUpdate.dto";
+import type { TaskCreateRequest } from "../dto/tasksCreate.dto";
 
 export type TasksQuery = {
   status?: TaskStatus;
   overdue?: boolean;
   customerId?: string;
   assignedUserId?: string;
-  from?: string; // ISO date
-  to?: string; // ISO date
+  from?: string;
+  to?: string;
 };
 
 export const tasksService = {
@@ -26,6 +27,15 @@ export const tasksService = {
     const res = await httpRequest<TaskListItemDto>({
       method: "PATCH",
       path: `/tasks/${taskId}`,
+      body,
+    });
+    return res.data;
+  },
+
+  async create(body: TaskCreateRequest): Promise<TaskListItemDto> {
+    const res = await httpRequest<TaskListItemDto>({
+      method: "POST",
+      path: "/tasks",
       body,
     });
     return res.data;

@@ -4,13 +4,17 @@ import { Box, Button, Divider, Paper, Stack, Typography } from "@mui/material";
 import type { UseQueryResult } from "@tanstack/react-query";
 
 import type { InteractionDto } from "../../../api/dto/interactions.dto";
+import type { CustomerDto } from "../../../api/dto/customers.dto";
 import { LoadingState } from "../../../components/common/LoadingState";
 import { ErrorState } from "../../../components/common/ErrorState";
 import { EmptyState } from "../../../components/common/EmptyState";
 import { AddInteractionDialog } from "./AddInteractionDialog";
+import { CreateTaskDialog } from "../../tasks/parts/CreateTaskDialog";
 
 type Props = {
   customerId: string;
+  customer?: CustomerDto;
+  allCustomers?: CustomerDto[];
   query: UseQueryResult<InteractionDto[], unknown>;
 };
 
@@ -27,24 +31,39 @@ function fmt(dt: string) {
 
 export function CustomerHistoryTab(props: Props) {
   const [open, setOpen] = useState(false);
+  const [openTask, setOpenTask] = useState(false);
 
   const items = useMemo(() => props.query.data ?? [], [props.query.data]);
 
   return (
     <Box>
-      <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", mb: 2 }}>
+      <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", mb: 2, gap: 1, flexWrap: "wrap" }}>
         <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
           История взаимодействий
         </Typography>
-        <Button variant="contained" onClick={() => setOpen(true)}>
-          Добавить взаимодействие
-        </Button>
+
+        <Stack direction="row" spacing={1}>
+          <Button variant="outlined" onClick={() => setOpenTask(true)}>
+            Создать задачу
+          </Button>
+          <Button variant="contained" onClick={() => setOpen(true)}>
+            Добавить взаимодействие
+          </Button>
+        </Stack>
       </Stack>
 
       <AddInteractionDialog
         customerId={props.customerId}
         open={open}
         onClose={() => setOpen(false)}
+      />
+
+      <CreateTaskDialog
+        open={openTask}
+        onClose={() => setOpenTask(false)}
+        customers={props.allCustomers ?? (props.customer ? [props.customer] : [])}
+        presetCustomerId={props.customerId}
+        presetCustomerName={props.customer?.name}
       />
 
       {props.query.isLoading ? <LoadingState /> : null}
