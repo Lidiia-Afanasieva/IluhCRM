@@ -1,6 +1,7 @@
 import type { MockDb } from "./types";
 
 const nowIso = () => new Date().toISOString();
+const isoPlusDays = (days: number) => new Date(Date.now() + days * 24 * 3600 * 1000).toISOString();
 
 export const db: MockDb = {
   me: {
@@ -11,6 +12,10 @@ export const db: MockDb = {
   },
   token: "mock-token",
 
+  sla: {
+    firstResponseTargetSeconds: 7200,
+  },
+
   customers: [
     {
       id: "c1",
@@ -19,7 +24,7 @@ export const db: MockDb = {
       stage: "in_work",
       ownerName: "Менеджер Ф5",
       lastInteractionAt: nowIso(),
-      nextActionDueAt: new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
+      nextActionDueAt: isoPlusDays(1),
     },
     {
       id: "c2",
@@ -36,8 +41,17 @@ export const db: MockDb = {
       segment: "Enterprise",
       stage: "proposal",
       ownerName: "Менеджер Ф5",
-      lastInteractionAt: new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString(),
-      nextActionDueAt: new Date(Date.now() + 2 * 24 * 3600 * 1000).toISOString(),
+      lastInteractionAt: isoPlusDays(-3),
+      nextActionDueAt: isoPlusDays(2),
+    },
+    {
+      id: "c4",
+      name: "ООО ЛайтСофт",
+      segment: "SMB",
+      stage: "in_work",
+      ownerName: "Менеджер Ф5",
+      lastInteractionAt: isoPlusDays(-1),
+      nextActionDueAt: isoPlusDays(-1),
     },
   ],
 
@@ -54,16 +68,82 @@ export const db: MockDb = {
       id: "i2",
       customerId: "c3",
       kind: "email",
-      occurredAt: new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString(),
+      occurredAt: isoPlusDays(-2),
       summary: "Отправлено КП. Ожидается обратная связь.",
       createdBy: "Менеджер Ф5",
+    },
+    {
+      id: "i3",
+      customerId: "c4",
+      kind: "meeting",
+      occurredAt: isoPlusDays(-1),
+      summary: "Встреча. Подтверждены ключевые боли, согласован черновик плана работ.",
+      createdBy: "Менеджер Ф5",
+    },
+  ],
+
+  tasks: [
+    {
+      id: "t1",
+      customerId: "c1",
+      title: "Отправить резюме встречи и список вопросов",
+      status: "open",
+      dueAt: isoPlusDays(-2),
+      priority: 3,
+      assignedTo: "Менеджер Ф5",
+    },
+    {
+      id: "t2",
+      customerId: "c1",
+      title: "Назначить демо",
+      status: "open",
+      dueAt: isoPlusDays(1),
+      priority: 2,
+      assignedTo: "Менеджер Ф5",
+    },
+    {
+      id: "t3",
+      customerId: "c2",
+      title: "Первичное касание и квалификация",
+      status: "open",
+      dueAt: isoPlusDays(-1),
+      priority: 4,
+      assignedTo: "Менеджер Ф5",
+    },
+    {
+      id: "t4",
+      customerId: "c3",
+      title: "Напоминание по КП",
+      status: "open",
+      dueAt: isoPlusDays(-5),
+      priority: 5,
+      assignedTo: "Менеджер Ф5",
+    },
+    {
+      id: "t5",
+      customerId: "c3",
+      title: "Подготовить демо-сценарий",
+      status: "done",
+      dueAt: isoPlusDays(-1),
+      priority: 2,
+      assignedTo: "Менеджер Ф5",
+    },
+    {
+      id: "t6",
+      customerId: "c4",
+      title: "Согласовать следующий шаг с ЛПР",
+      status: "open",
+      dueAt: isoPlusDays(-1),
+      priority: 4,
+      assignedTo: "Менеджер Ф5",
     },
   ],
 
   quality: {
     c1: { firstResponseSecondsAvg: 5400, overdueTasksCount: 1, interactionsCount: 4, npsScore: 8 },
     c2: { firstResponseSecondsAvg: 0, overdueTasksCount: 0, interactionsCount: 0, npsScore: null },
-    c3: { firstResponseSecondsAvg: 7200, overdueTasksCount: 0, interactionsCount: 2, npsScore: 9 },
+    c3: { firstResponseSecondsAvg: 9000, overdueTasksCount: 0, interactionsCount: 2, npsScore: 9 },
+    c4: { firstResponseSecondsAvg: 3600, overdueTasksCount: 2, interactionsCount: 3, npsScore: 7 },
   },
 
   personalization: {
@@ -84,6 +164,12 @@ export const db: MockDb = {
       recommendedTemplate: "Дожим после КП",
       nextBestAction: "Напомнить о КП и предложить демо",
       reason: "Стадия proposal, контакт 2-3 дня назад",
+    },
+    c4: {
+      segment: "SMB",
+      recommendedTemplate: "Скрипт работы с возражениями",
+      nextBestAction: "Уточнить сроки и критерии принятия решения",
+      reason: "Есть просрочка по следующему шагу",
     },
   },
 };

@@ -1,3 +1,4 @@
+import dayjs from "dayjs";
 import type { HttpResponse } from "../httpClient";
 import { db } from "./db";
 
@@ -30,6 +31,62 @@ function requireAuth<T>(req: MockReq, handler: () => HttpResponse<T>): HttpRespo
   return handler();
 }
 
+function readStr(x: unknown): string | undefined {
+  if (x === undefined || x === null) return undefined;
+  const s = String(x).trim();
+  return s.length ? s : undefined;
+}
+
+function readBool(x: unknown): boolean | undefined {
+  if (x === undefined || x === null) return undefined;
+  if (x === true || x === "true" || x === 1 || x === "1") return true;
+  if (x === false || x === "false" || x === 0 || x === "0") return false;
+  return undefined;
+}
+
+function defaultPeriod() {
+  const to = dayjs().format("YYYY-MM-DD");
+  const from = dayjs().subtract(6, "day").format("YYYY-MM-DD");
+  return { from, to };
+}
+
+function inDateRange(iso: string, from: string, to: string): boolean {
+  const d = dayjs(iso);
+  const f = dayjs(from, "YYYY-MM-DD").startOf("day");
+  const t = dayjs(to, "YYYY-MM-DD").endOf("day");
+  return (d.isAfter(f) || d.isSame(f)) && (d.isBefore(t) || d.isSame(t));
+}
+
+function buildTaskListItem(task: {
+  id: string;
+  customerId: string;
+  title: string;
+  status: "open" | "done" | "canceled";
+  dueAt: string;
+  priority: number;
+  assignedTo: string;
+}) {
+  const now = dayjs();
+  const due = dayjs(task.dueAt);
+  const isOverdue = task.status === "open" && due.isBefore(now);
+  const daysOverdue = isOverdue ? Math.max(0, Math.floor(now.diff(due, "day", true))) : 0;
+
+  const customerName = db.customers.find((c) => c.id === task.customerId)?.name ?? task.customerId;
+
+  return {
+    id: task.id,
+    customerId: task.customerId,
+    customerName,
+    title: task.title,
+    status: task.status,
+    dueAt: task.dueAt,
+    priority: task.priority,
+    assignedTo: task.assignedTo,
+    isOverdue,
+    daysOverdue,
+  };
+}
+
 export async function mockRouter<T>(req: MockReq): Promise<HttpResponse<T>> {
   await new Promise((r) => setTimeout(r, 120));
 
@@ -43,8 +100,8 @@ export async function mockRouter<T>(req: MockReq): Promise<HttpResponse<T>> {
 
   if (req.path === "/customers" && req.method === "GET") {
     return requireAuth(req, () => {
-      const q = String(req.query?.q ?? "").toLowerCase().trim();
-      const stage = String(req.query?.stage ?? "").trim();
+      const q = (readStr(req.query?.q)?.toLowerCase() ?? "").trim();
+      const stage = readStr(req.query?.stage);
 
       let rows = [...db.customers];
       if (q) rows = rows.filter((x) => x.name.toLowerCase().includes(q));
@@ -94,12 +151,16 @@ export async function mockRouter<T>(req: MockReq): Promise<HttpResponse<T>> {
   }
 
   if (customerId && req.path === `/customers/${customerId}/quality` && req.method === "GET") {
-    return requireAuth(req, () => ok((db.quality[customerId] ?? {
-      firstResponseSecondsAvg: 0,
-      overdueTasksCount: 0,
-      interactionsCount: 0,
-      npsScore: null,
-    }) as any));
+    return requireAuth(req, () =>
+      ok(
+        (db.quality[customerId] ?? {
+          firstResponseSecondsAvg: 0,
+          overdueTasksCount: 0,
+          interactionsCount: 0,
+          npsScore: null,
+        }) as any
+      )
+    );
   }
 
   if (customerId && req.path === `/customers/${customerId}/quality/feedback` && req.method === "POST") {
@@ -118,12 +179,16 @@ export async function mockRouter<T>(req: MockReq): Promise<HttpResponse<T>> {
   }
 
   if (customerId && req.path === `/customers/${customerId}/personalization` && req.method === "GET") {
-    return requireAuth(req, () => ok((db.personalization[customerId] ?? {
-      segment: null,
-      recommendedTemplate: null,
-      nextBestAction: null,
-      reason: null,
-    }) as any));
+    return requireAuth(req, () =>
+      ok(
+        (db.personalization[customerId] ?? {
+          segment: null,
+          recommendedTemplate: null,
+          nextBestAction: null,
+          reason: null,
+        }) as any
+      )
+    );
   }
 
   if (customerId && req.path === `/customers/${customerId}/personalization/note` && req.method === "POST") {
@@ -141,7 +206,11 @@ export async function mockRouter<T>(req: MockReq): Promise<HttpResponse<T>> {
     });
   }
 
-  if (customerId && req.path === `/customers/${customerId}/personalization/next-action` && req.method === "POST") {
+  if (
+    customerId &&
+    req.path === `/customers/${customerId}/personalization/next-action` &&
+    req.method === "POST"
+  ) {
     return requireAuth(req, () => {
       const body = req.body as any;
       const current = db.personalization[customerId] ?? {
@@ -150,16 +219,168 @@ export async function mockRouter<T>(req: MockReq): Promise<HttpResponse<T>> {
         nextBestAction: null,
         reason: null,
       };
-      const updated = {
-        ...current,
-        nextBestAction: String(body.nextBestAction || ""),
-      };
+      const updated = { ...current, nextBestAction: String(body.nextBestAction || "") };
       db.personalization[customerId] = updated;
 
       const cust = db.customers.find((x) => x.id === customerId);
       if (cust) cust.nextActionDueAt = String(body.nextActionDueAt || null);
 
       return ok(updated as any);
+    });
+  }
+
+  if (req.path === "/tasks" && req.method === "GET") {
+    return requireAuth(req, () => {
+      const status = readStr(req.query?.status) as any;
+      const overdue = readBool(req.query?.overdue);
+      const customerIdQ = readStr(req.query?.customerId);
+      const assignedUserId = readStr(req.query?.assignedUserId);
+      const fromQ = readStr(req.query?.from);
+      const toQ = readStr(req.query?.to);
+
+      const period = fromQ && toQ ? { from: fromQ, to: toQ } : defaultPeriod();
+      const now = dayjs();
+
+      let rows = [...db.tasks];
+
+      if (status) rows = rows.filter((x) => x.status === status);
+      if (customerIdQ) rows = rows.filter((x) => x.customerId === customerIdQ);
+
+      if (assignedUserId) {
+        rows = rows.filter(() => db.me.id === assignedUserId);
+      }
+
+      if (period.from && period.to) {
+        rows = rows.filter((x) => inDateRange(x.dueAt, period.from, period.to));
+      }
+
+      if (overdue === true) {
+        rows = rows.filter((x) => x.status === "open" && dayjs(x.dueAt).isBefore(now));
+      }
+      if (overdue === false) {
+        rows = rows.filter((x) => !(x.status === "open" && dayjs(x.dueAt).isBefore(now)));
+      }
+
+      const list = rows.map(buildTaskListItem);
+
+      list.sort((a, b) => {
+        if (a.isOverdue !== b.isOverdue) return a.isOverdue ? -1 : 1;
+        if (a.dueAt !== b.dueAt) return a.dueAt < b.dueAt ? -1 : 1;
+        return b.priority - a.priority;
+      });
+
+      return ok(list as any);
+    });
+  }
+
+  const taskId = parseId(req.path, "/tasks/");
+  if (taskId && req.method === "PATCH" && req.path === `/tasks/${taskId}`) {
+    return requireAuth(req, () => {
+      const body = req.body as any;
+
+      const idx = db.tasks.findIndex((t) => t.id === taskId);
+      if (idx < 0) return { status: 404, data: ({} as any) };
+
+      const current = db.tasks[idx];
+
+      const next = {
+        ...current,
+        status: body.status ?? current.status,
+        dueAt: body.dueAt ?? current.dueAt,
+        priority: body.priority ?? current.priority,
+      };
+
+      db.tasks[idx] = next;
+
+      const dto = buildTaskListItem(next);
+      return ok(dto as any);
+    });
+  }
+
+  if (req.path === "/metrics/quality" && req.method === "GET") {
+    return requireAuth(req, () => {
+      const ownerId = readStr(req.query?.ownerId);
+      const stage = readStr(req.query?.stage);
+      const fromQ = readStr(req.query?.from);
+      const toQ = readStr(req.query?.to);
+
+      const period = fromQ && toQ ? { from: fromQ, to: toQ } : defaultPeriod();
+      const now = dayjs();
+
+      let customers = [...db.customers];
+      if (stage) customers = customers.filter((c) => c.stage === stage);
+      if (ownerId) customers = customers.filter(() => db.me.id === ownerId);
+
+      const customerIdSet = new Set(customers.map((c) => c.id));
+      const customerNameById = new Map(customers.map((c) => [c.id, c.name] as const));
+
+      const interactions = db.interactions.filter(
+        (x) => customerIdSet.has(x.customerId) && inDateRange(x.occurredAt, period.from, period.to)
+      );
+
+      const firstRespValues = customers
+        .map((c) => db.quality[c.id]?.firstResponseSecondsAvg ?? 0)
+        .filter((v) => Number.isFinite(v) && v > 0);
+
+      const firstResponseSecondsAvg =
+        firstRespValues.length > 0
+          ? Math.round(firstRespValues.reduce((a, b) => a + b, 0) / firstRespValues.length)
+          : 0;
+
+      const npsValues = customers
+        .map((c) => db.quality[c.id]?.npsScore ?? null)
+        .filter((v): v is number => v !== null && Number.isFinite(v));
+
+      const npsAvg =
+        npsValues.length > 0
+          ? Math.round((npsValues.reduce((a, b) => a + b, 0) / npsValues.length) * 10) / 10
+          : null;
+
+      const overdueRows = db.tasks
+        .filter((t) => customerIdSet.has(t.customerId))
+        .filter((t) => t.status === "open" && dayjs(t.dueAt).isBefore(now))
+        .map((t) => {
+          const due = dayjs(t.dueAt);
+          const daysOverdue = Math.max(0, Math.floor(now.diff(due, "day", true)));
+          return {
+            id: t.id,
+            customerId: t.customerId,
+            customerName: customerNameById.get(t.customerId) ?? t.customerId,
+            title: t.title,
+            status: t.status,
+            dueAt: t.dueAt,
+            priority: t.priority,
+            assignedTo: t.assignedTo,
+            daysOverdue,
+          };
+        })
+        .sort((a, b) =>
+          a.daysOverdue === b.daysOverdue ? b.priority - a.priority : b.daysOverdue - a.daysOverdue
+        );
+
+      const target = db.sla.firstResponseTargetSeconds;
+      const withinSlaPercent =
+        firstRespValues.length > 0
+          ? Math.round((firstRespValues.filter((v) => v <= target).length / firstRespValues.length) * 100)
+          : 0;
+
+      const dto = {
+        period: { from: period.from, to: period.to },
+        sla: {
+          firstResponseTargetSeconds: target,
+          firstResponseActualAvgSeconds: firstResponseSecondsAvg,
+          withinSlaPercent,
+        },
+        kpi: {
+          firstResponseSecondsAvg,
+          overdueTasksCount: overdueRows.length,
+          interactionsCount: interactions.length,
+          npsAvg,
+        },
+        overdueTasks: overdueRows,
+      };
+
+      return ok(dto as any);
     });
   }
 

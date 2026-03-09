@@ -8,4 +8,7 @@ export const queryKeys = {
 
   quality: (customerId: string) => ["quality", customerId] as const,
   personalization: (customerId: string) => ["personalization", customerId] as const,
+
+  tasks: (params: unknown) => ["tasks", params] as const,
+  qualityDashboard: (params: unknown) => ["metrics", "quality", params] as const,
 };

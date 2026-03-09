@@ -3,6 +3,7 @@ import type { CustomerDto } from "../dto/customers.dto";
 import type { InteractionDto } from "../dto/interactions.dto";
 import type { QualityDto } from "../dto/quality.dto";
 import type { PersonalizationDto } from "../dto/personalization.dto";
+import type { TaskDto } from "../dto/tasks.dto";
 
 export type MockDb = {
   me: MeResponse;
@@ -10,6 +11,12 @@ export type MockDb = {
 
   customers: CustomerDto[];
   interactions: InteractionDto[];
+  tasks: TaskDto[];
+
   quality: Record<string, QualityDto>;
   personalization: Record<string, PersonalizationDto>;
+
+  sla: {
+    firstResponseTargetSeconds: number;
+  };
 };
