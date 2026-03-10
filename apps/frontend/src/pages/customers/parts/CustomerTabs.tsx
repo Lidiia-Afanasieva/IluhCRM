@@ -1,6 +1,6 @@
 import { Tabs, Tab } from "@mui/material";
 
-export type CustomerTabKey = "history" | "quality" | "personalization";
+export type CustomerTabKey = "history" | "quality" | "personalization" | "tasks";
 
 type Props = {
   value: CustomerTabKey;
@@ -18,6 +18,7 @@ export function CustomerTabs(props: Props) {
       <Tab value="history" label="История" />
       <Tab value="quality" label="Качество" />
       <Tab value="personalization" label="Персонализация" />
+      <Tab value="tasks" label="Задачи" />
     </Tabs>
   );
 }

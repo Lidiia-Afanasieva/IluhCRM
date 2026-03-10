@@ -17,6 +17,7 @@ import { CustomerTabs, type CustomerTabKey } from "./parts/CustomerTabs";
 import { CustomerHistoryTab } from "./parts/CustomerHistoryTab";
 import { CustomerQualityTab } from "./parts/CustomerQualityTab";
 import { CustomerPersonalTab } from "./parts/CustomerPersonalTab";
+import { CustomerTasksTab } from "./parts/CustomerTasksTab";
 
 export function CustomerDetailsPage() {
   const nav = useNavigate();
@@ -32,7 +33,7 @@ export function CustomerDetailsPage() {
   const personalizationQuery = usePersonalization(id);
 
   const subtitle = useMemo(() => {
-    if (!customerQuery.data) return "Карточка клиента: история, качество, персонализация";
+    if (!customerQuery.data) return "Карточка клиента: история, качество, персонализация, задачи";
     const x = customerQuery.data;
     const seg = x.segment ? `Сегмент: ${x.segment}` : "Сегмент: не задан";
     return `${seg}. Стадия: ${x.stage}. Ответственный: ${x.ownerName}`;
@@ -80,6 +81,13 @@ export function CustomerDetailsPage() {
               customer={customerQuery.data}
               allCustomers={allCustomersQuery.data}
               query={personalizationQuery}
+            />
+          ) : null}
+
+          {tab === "tasks" && customerQuery.data ? (
+            <CustomerTasksTab
+              customer={customerQuery.data}
+              allCustomers={allCustomersQuery.data}
             />
           ) : null}
         </Box>

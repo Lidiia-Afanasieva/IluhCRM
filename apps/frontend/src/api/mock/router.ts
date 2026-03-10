@@ -238,7 +238,6 @@ export async function mockRouter<T>(req: MockReq): Promise<HttpResponse<T>> {
       const fromQ = readStr(req.query?.from);
       const toQ = readStr(req.query?.to);
 
-      const period = fromQ && toQ ? { from: fromQ, to: toQ } : defaultPeriod();
       const now = dayjs();
 
       let rows = [...db.tasks];
@@ -247,7 +246,9 @@ export async function mockRouter<T>(req: MockReq): Promise<HttpResponse<T>> {
       if (customerIdQ) rows = rows.filter((x) => x.customerId === customerIdQ);
       if (assignedUserId) rows = rows.filter(() => db.me.id === assignedUserId);
 
-      rows = rows.filter((x) => inDateRange(x.dueAt, period.from, period.to));
+      if (fromQ && toQ) {
+        rows = rows.filter((x) => inDateRange(x.dueAt, fromQ, toQ));
+      }
 
       if (overdue === true) {
         rows = rows.filter((x) => x.status === "open" && dayjs(x.dueAt).isBefore(now));
@@ -285,9 +286,7 @@ export async function mockRouter<T>(req: MockReq): Promise<HttpResponse<T>> {
       db.tasks.push(created);
 
       const cust = db.customers.find((x) => x.id === created.customerId);
-      if (cust) {
-        cust.nextActionDueAt = created.dueAt;
-      }
+      if (cust) cust.nextActionDueAt = created.dueAt;
 
       return ok(buildTaskListItem(created) as any);
     });
@@ -380,18 +379,19 @@ export async function mockRouter<T>(req: MockReq): Promise<HttpResponse<T>> {
           a.daysOverdue === b.daysOverdue ? b.priority - a.priority : b.daysOverdue - a.daysOverdue
         );
 
-      const target = db.sla.firstResponseTargetSeconds;
-      const withinSlaPercent =
-        firstRespValues.length > 0
-          ? Math.round((firstRespValues.filter((v) => v <= target).length / firstRespValues.length) * 100)
-          : 0;
-
       return ok({
         period: { from: period.from, to: period.to },
         sla: {
-          firstResponseTargetSeconds: target,
+          firstResponseTargetSeconds: db.sla.firstResponseTargetSeconds,
           firstResponseActualAvgSeconds: firstResponseSecondsAvg,
-          withinSlaPercent,
+          withinSlaPercent:
+            firstRespValues.length > 0
+              ? Math.round(
+                  (firstRespValues.filter((v) => v <= db.sla.firstResponseTargetSeconds).length /
+                    firstRespValues.length) *
+                    100
+                )
+              : 0,
         },
         kpi: {
           firstResponseSecondsAvg,
